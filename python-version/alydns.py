@@ -22,15 +22,20 @@ else:
     from urllib import request
     pv = "python3"
 
-ACCESS_KEY_ID = 'access_key_id'
-ACCESS_KEY_SECRET = 'access_key_secret'
-
-
 class AliDns:
     def __init__(self, access_key_id, access_key_secret, domain_name):
         self.access_key_id = access_key_id
         self.access_key_secret = access_key_secret
         self.domain_name = domain_name
+
+    @staticmethod
+    def getDomain(domain):
+        domain_parts = domain.split('.')
+        if len(domain_parts) > 2:
+            rootdomain='.'.join(domain_parts[-(2 if domain_parts[-1] in {"co.jp","com.tw","net","com","com.cn","org","cn","gov","net.cn","io","top","me","int","edu","link"} else 3):])
+            selfdomain=domain.split(rootdomain)[0]
+            return (selfdomain[0:len(selfdomain)-1],rootdomain)
+        return ("",domain)
 
     @staticmethod
     def generate_random_str(length=14):
@@ -162,10 +167,11 @@ class AliDns:
 
 
 if __name__ == '__main__':
-    # domain = AliDns(ACCESS_KEY_ID, ACCESS_KEY_SECRET, 'simplehttps.com')
-    # domain.describe_domain_records()
-    # 增加记录
-    # domain.add_domain_record("TXT", "test", "test")
+    #filename,ACCESS_KEY_ID, ACCESS_KEY_SECRET = sys.argv
+    #domain = AliDns(ACCESS_KEY_ID, ACCESS_KEY_SECRET, 'simplehttps.com')
+    #domain.describe_domain_records()
+    #增加记录
+    #print(domain.add_domain_record("TXT", "test", "test"))
 
    
     # 修改解析
@@ -178,15 +184,44 @@ if __name__ == '__main__':
     #		domain.delete_domain_record(item['RecordId'])
 
    
-    #print(sys.argv)
-    file_name, certbot_domain, acme_challenge, certbot_validation = sys.argv
+	# 第一个参数是 action，代表 (add/clean) 
+	# 第二个参数是域名 
+	# 第三个参数是主机名（第三个参数+第二个参数组合起来就是要添加的 TXT 记录）
+	# 第四个参数是 TXT 记录值
+	# 第五个参数是 APPKEY
+	# 第六个参数是 APPTOKEN
+    #sys.exit(0)
+    
+    print ("域名 API 调用开始")
+    print ("-".join(sys.argv))
+    file_name, cmd ,certbot_domain, acme_challenge, certbot_validation,ACCESS_KEY_ID, ACCESS_KEY_SECRET = sys.argv
+  
+ 
+    certbot_domain=AliDns.getDomain(certbot_domain)
+    # print (certbot_domain)
+    if certbot_domain[0]=="":
+            selfdomain =  acme_challenge
+    else:
+            selfdomain = acme_challenge + "." + certbot_domain[0]
 
-    domain = AliDns(ACCESS_KEY_ID, ACCESS_KEY_SECRET, certbot_domain)
-    data = domain.describe_domain_records()
-    record_list = data["DomainRecords"]["Record"]
-    if record_list:
-        for item in record_list:
-            if acme_challenge == item['RR']:
-                domain.delete_domain_record(item['RecordId'])
 
-    domain.add_domain_record("TXT", acme_challenge, certbot_validation)
+    domain = AliDns(ACCESS_KEY_ID, ACCESS_KEY_SECRET, certbot_domain[1])
+  
+    if cmd == "add":
+        result = (domain.add_domain_record("TXT",selfdomain, certbot_validation))
+        
+	if "Code" in result:
+		print ("aly dns 域名增加失败-"+str(result["Code"]) + ":" + str(result["Message"]))
+    elif cmd == "clean":
+        data = domain.describe_domain_records()
+	if "Code" in data:
+		print ("aly dns 域名删除失败-"+str(data["Code"]) + ":" + str(data["Message"]))
+		sys.exit(0)
+	record_list = data["DomainRecords"]["Record"]
+        if record_list:
+            for item in record_list:
+                if (item['RR'] == selfdomain):
+                    domain.delete_domain_record(item['RecordId'])
+
+print ("域名 API 调用结束")
+

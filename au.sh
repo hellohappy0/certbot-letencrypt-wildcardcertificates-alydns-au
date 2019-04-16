@@ -1,23 +1,91 @@
 #!/bin/bash
 
-# 阿里云操作 DNS Hook
+
+#ywdblog@gmail.com 欢迎关注我的书《深入浅出HTTPS：从原理到实战》
+
+#填写腾讯云的AccessKey ID及AccessKey Secret
+#如何申请见https://help.aliyun.com/knowledge_detail/38738.html
+ALY_KEY=""
+ALY_TOKEN=""
+
+#填写腾讯云的SecretId及SecretKey
+#如何申请见https://console.cloud.tencent.com/cam/capi
+TXY_KEY=""
+TXY_TOKEN=""
+
+#GoDaddy的SecretId及SecretKey
+#如何申请见https://developer.godaddy.com/getstarted
+GODADDY_KEY=""
+GODADDY_TOKEN=""
 
 PATH=$(cd `dirname $0`; pwd)
 
-echo $PATH"/alydns.php"
+# 命令行参数
+# 第一个参数：使用什么语言环境
+# 第二个参数：使用那个 DNS 的 API
+# 第三个参数：add or clean
+plang=$1 #python or php 
+pdns=$2 #aly or txy
+paction=$3 #add or clean
 
-# 调用 PHP 脚本，自动设置 DNS TXT 记录。
-# 第一个参数：需要为那个域名设置 DNS 记录
-# 第二个参数：需要为具体那个 RR 设置
-# 第三个参数: letsencrypt 动态传递的 RR 值 
+#PHP 命令行路径，如果有需要可以修改 
+phpcmd="/usr/bin/php"
+#Python 命令行路径，如果有需要可以修改 
+pythoncmd="/usr/bin/python"
 
-echo $CERTBOT_DOMAIN"_acme-challenge"$CERTBOT_VALIDATION
+#内部变量
+cmd=""
+key=""
+token=""
 
-/usr/bin/php  $PATH"/alydns.php"  $CERTBOT_DOMAIN "_acme-challenge"  $CERTBOT_VALIDATION >"/var/log/certdebug.log"
+if [[ "$paction" != "clean" ]]; then
+	paction="add"
+fi
 
-# DNS TXT 记录刷新时间
-/bin/sleep 20
+case $plang in 
+	"php")  
 
-echo "END"
-###
+	cmd=$phpcmd
+	if [[ "$pdns" == "aly" ]];  then
+		dnsapi=$PATH"/php-version/alydns.php"		
+		key=$ALY_KEY		
+		token=$ALY_TOKEN
+	elif [[ "$pdns" == "txy" ]] ;then 
+		dnsapi="$PATH/php-version/txydns.php"
+		key=$TXY_KEY
+		token=$TXY_TOKEN
+	else
+		dnsapi="$PATH/php-version/godaddydns.php"
+		key=$GODADDY_KEY
+		token=$GODADDY_TOKEN
+	fi
+	;;
+	
+	"python")
+	
+	cmd=$pythoncmd
+	if [[ "$pdns" == "aly" ]];  then
+			dnsapi=$PATH"/python-version/alydns.py"
+			key=$ALY_KEY
+			token=$ALY_TOKEN
+        elif [[ "$pdns" == "txy" ]] ;then
+			dnsapi=$PATH"/python-version/txydns.py"
+			key=$TXY_KEY
+			token=$TXY_TOKEN
+	else
+		key=$GODADDY_KEY
+		token=$GODADDY_TOKEN
+		echo "目前不支持python版本的非阿里云DNS处理"
+		exit
+        fi
+        ;;	
+esac
+
+
+$cmd $dnsapi $paction $CERTBOT_DOMAIN "_acme-challenge" $CERTBOT_VALIDATION $key $token >>"/var/log/certd.log"
+
+if [[ "$paction" == "add" ]]; then
+        # DNS TXT 记录刷新时间
+        /bin/sleep 20
+fi
 
